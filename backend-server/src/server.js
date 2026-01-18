@@ -38,23 +38,23 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    // Allow any localhost origin for development
-    if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
-      return callback(null, true);
-    }
+  // Allow requests with no origin (like mobile apps or curl requests)
+  if(!origin) return callback(null, true);
+
+  // Allow any localhost origin (dev mode or local electron)
+  if(origin.includes('localhost') || origin.includes('127.0.0.1')) {
+  return callback(null, true);
+}
     // Check against configured origin
     if (origin === (process.env.CORS_ORIGIN || 'http://localhost:3000')) {
-      return callback(null, true);
-    }
-    if (origin === (process.env.CORS_ORIGIN || 'http://localhost:3000')) {
-      return callback(null, true);
-    }
-    callback(new Error('Not allowed by CORS'));
+  return callback(null, true);
+}
+if (origin === (process.env.CORS_ORIGIN || 'http://localhost:3000')) {
+  return callback(null, true);
+}
+callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
