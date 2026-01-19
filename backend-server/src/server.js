@@ -28,7 +28,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'development' ? '*' : (process.env.CORS_ORIGIN || 'http://localhost:3000'),
+    origin: '*',
     methods: ['GET', 'POST']
   }
 });
