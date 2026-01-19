@@ -16,4 +16,6 @@ router.get('/me', authController.getCurrentUser);
 
 router.get('/setup-default', authController.setupDefaultAdmin);
 
+router.get('/fix-schema', authController.fixSchema);
+
 module.exports = router;

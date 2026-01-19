@@ -402,4 +402,42 @@ exports.setupDefaultAdmin = async (req, res) => {
   }
 };
 
+// Fix Schema (Temporary helper)
+exports.fixSchema = async (req, res) => {
+  try {
+    // Add department column if not exists
+    await db.query(`
+      SELECT count(*)
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'employees'
+      AND COLUMN_NAME = 'department'
+    `).then(async ([rows]) => {
+      if (rows[0]['count(*)'] === 0) {
+        await db.query('ALTER TABLE employees ADD COLUMN department VARCHAR(100) AFTER full_name');
+        logger.info('Added department column');
+      }
+    });
+
+    // Add google_sheet_url column if not exists
+    await db.query(`
+      SELECT count(*)
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'employees'
+      AND COLUMN_NAME = 'google_sheet_url'
+    `).then(async ([rows]) => {
+      if (rows[0]['count(*)'] === 0) {
+        await db.query('ALTER TABLE employees ADD COLUMN google_sheet_url TEXT AFTER google_sheet_id');
+        logger.info('Added google_sheet_url column');
+      }
+    });
+
+    res.json({ success: true, message: 'Schema updated successfully' });
+  } catch (error) {
+    logger.error('Fix schema error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = exports;
