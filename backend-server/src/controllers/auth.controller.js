@@ -373,4 +373,33 @@ exports.getCurrentUser = async (req, res) => {
   }
 };
 
+// Setup Default Admin (Temporary helper)
+exports.setupDefaultAdmin = async (req, res) => {
+  try {
+    const adminEmail = 'admin@company.com';
+    const adminPassword = 'Admin@123';
+
+    // Check if admin exists
+    const [existing] = await db.query('SELECT * FROM admin_users WHERE email = ?', [adminEmail]);
+
+    if (existing) {
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      await db.query('UPDATE admin_users SET password_hash = ? WHERE email = ?', [hashedPassword, adminEmail]);
+      return res.json({ success: true, message: 'Admin exists. Password reset to Admin@123' });
+    }
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    await db.query(
+      `INSERT INTO admin_users (id, email, password_hash, full_name, role) 
+         VALUES (?, ?, ?, 'System Administrator', 'SUPER_ADMIN')`,
+      [uuidv4(), adminEmail, hashedPassword]
+    );
+
+    res.json({ success: true, message: 'Default admin created: admin@company.com / Admin@123' });
+  } catch (error) {
+    logger.error('Setup admin error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = exports;

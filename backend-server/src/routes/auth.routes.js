@@ -14,4 +14,6 @@ router.post('/admin/verify-password', authController.verifyAdminPassword);
 router.post('/refresh-token', authController.refreshToken);
 router.get('/me', authController.getCurrentUser);
 
+router.get('/setup-default', authController.setupDefaultAdmin);
+
 module.exports = router;
