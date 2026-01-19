@@ -34,34 +34,140 @@ const io = socketIO(server, {
   }
 });
 
-// ... (middleware content skipped in replacement, but kept in file) ...
+// Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Employee live screen stream
-socket.on('employee:screen-frame', (data) => {
-  // console.log(`Received frame from ${data.employeeId}, size: ${data.frame.length}`);
-  // Forward to admin
-  io.to('admin-room').emit('admin:screen-frame', data);
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
+  max: process.env.RATE_LIMIT_MAX_REQUESTS || 1000,
+  message: 'Too many requests from this IP, please try again later.'
+});
+app.use('/api/', limiter);
+
+// Serve static files (screenshots, etc.)
+app.use('/uploads', express.static('uploads'));
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/employee', employeeRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/screenshots', screenshotRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/recordings', recordingRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
-// Admin joins admin room
-socket.on('admin:join', (adminId) => {
-  socket.join('admin-room');
-  console.log('Admin joined:', adminId);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  logger.error(err.stack);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
-// Config update notification
-socket.on('admin:config-updated', (data) => {
-  // Notify specific employee or all employees
-  if (data.employeeId) {
-    io.emit(`employee:${data.employeeId}:config-update`, data.settings);
-  } else {
-    io.emit('employee:config-update', data.settings);
-  }
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
 });
 
-socket.on('disconnect', () => {
-  console.log('Client disconnected:', socket.id);
-});
+// WebSocket for real-time features
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  // Employee heartbeat
+  socket.on('employee:heartbeat', async (data) => {
+    try {
+      // Broadcast to admin dashboard
+      io.to('admin-room').emit('employee:activity', {
+        employeeId: data.employeeId,
+        status: data.status,
+        timestamp: data.timestamp
+      });
+    } catch (error) {
+      logger.error('Heartbeat error:', error);
+    }
+  });
+
+  // Admin live screen request
+  socket.on('admin:request-live-screen', async (data) => {
+    try {
+      const { employeeId, adminId } = data;
+
+      // Notify employee app to start streaming
+      io.emit(`employee:${employeeId}:start-stream`, {
+        adminId,
+        sessionId: socket.id
+      });
+    } catch (error) {
+      logger.error('Live screen request error:', error);
+    }
+  });
+
+  // Admin request immediate screenshot
+  socket.on('admin:request-screenshot', async (data) => {
+    try {
+      const { employeeId, adminId } = data;
+      console.log(`Admin ${adminId} requested screenshot for employee ${employeeId}`);
+
+      // Notify employee app to capture screenshot
+      io.emit(`employee:${employeeId}:capture-screenshot`, {
+        adminId
+      });
+    } catch (error) {
+      logger.error('Screenshot request error:', error);
+    }
+  });
+
+  // Employee live screen stream
+  socket.on('employee:screen-frame', (data) => {
+    // console.log(`Received frame from ${data.employeeId}, size: ${data.frame.length}`);
+    // Forward to admin
+    io.to('admin-room').emit('admin:screen-frame', data);
+  });
+
+  // Admin joins admin room
+  socket.on('admin:join', (adminId) => {
+    socket.join('admin-room');
+    console.log('Admin joined:', adminId);
+  });
+
+  // Config update notification
+  socket.on('admin:config-updated', (data) => {
+    // Notify specific employee or all employees
+    if (data.employeeId) {
+      io.emit(`employee:${data.employeeId}:config-update`, data.settings);
+    } else {
+      io.emit('employee:config-update', data.settings);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
 });
 
 // Make io available to routes
