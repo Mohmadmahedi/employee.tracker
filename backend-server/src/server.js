@@ -149,7 +149,9 @@ io.on('connection', (socket) => {
   socket.on('employee:heartbeat', async (data) => {
     try {
       // Ensure they are in their room if they reconnected without full handshake logic
+      // Also update the socket user data for disconnect tracking
       if (data.employeeId) {
+        socket.user = { id: data.employeeId, ...socket.user }; // minimal user object
         socket.join(`employee:${data.employeeId}`);
       }
 
@@ -161,6 +163,16 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       logger.error('Heartbeat error:', error);
+    }
+  });
+
+  // Handle Disconnect
+  socket.on('disconnect', () => {
+    if (socket.user && socket.user.id) {
+      console.log(`[Socket] User ${socket.user.id} disconnected`);
+      io.to('admin-room').emit('employee:disconnected', {
+        employeeId: socket.user.id
+      });
     }
   });
 
