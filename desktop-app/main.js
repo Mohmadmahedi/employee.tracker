@@ -34,8 +34,8 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1000,
         height: 700,
-        show: false, // STEALTH: Don't show by default (DEBUG: true)
-        skipTaskbar: true, // STEALTH: Don't show in taskbar initially (DEBUG: false)
+        show: true, // DEBUG: Show by default
+        skipTaskbar: false, // DEBUG: Show in taskbar
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,

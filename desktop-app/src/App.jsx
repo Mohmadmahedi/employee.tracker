@@ -44,7 +44,7 @@ function App() {
         // Admins need to see the dashboard to manage the system
         if (window.trackerAPI && !user.role) {
           console.log('[System] Employee detected, entering stealth mode');
-          window.trackerAPI.hideApp(); // COMMENTED OUT FOR DEBUGGING
+          // window.trackerAPI.hideApp(); // DISABLED FOR DEBUGGING
         } else if (window.trackerAPI && user.role) {
           console.log('[System] Admin detected, showing dashboard');
           window.trackerAPI.showLogin(); // showLogin actually just shows the window
