@@ -41,6 +41,12 @@ const ScreenBroadcaster = () => {
                 const sourceId = await window.trackerAPI.getDesktopSourceId();
                 if (!sourceId) {
                     console.error('No screen source found');
+
+                    socketService.emit('employee:stream-failed', {
+                        targetSocketId,
+                        error: 'No screen source available (Permissions?)'
+                    });
+
                     isStarting.current = false;
                     return;
                 }
@@ -65,6 +71,12 @@ const ScreenBroadcaster = () => {
                     });
                 } catch (mediaError) {
                     console.error('getUserMedia failed:', mediaError);
+
+                    socketService.emit('employee:stream-failed', {
+                        targetSocketId,
+                        error: `getUserMedia failed: ${mediaError.name} - ${mediaError.message}`
+                    });
+
                     isStarting.current = false;
                     return;
                 }
@@ -77,6 +89,13 @@ const ScreenBroadcaster = () => {
 
             } catch (error) {
                 console.error('Failed to start WebRTC stream:', error);
+
+                // Notify server of failure
+                socketService.emit('employee:stream-failed', {
+                    targetSocketId,
+                    error: error.message || 'Unknown WebRTC error'
+                });
+
                 isStarting.current = false;
             }
         };

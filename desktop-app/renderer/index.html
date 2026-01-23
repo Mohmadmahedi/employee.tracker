@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Tracker - Enterprise Monitoring</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-container" class="container">
+    <div class="header">
+      <h2>Employee Login</h2>
+      <p>Enter your credentials to start your session</p>
+    </div>
+    <form id="login-form">
+      <div class="input-group">
+        <label>Email Address</label>
+        <input type="email" id="email" required placeholder="name@company.com">
+      </div>
+      <div class="input-group">
+        <label>Password</label>
+        <input type="password" id="password" required placeholder="••••••••">
+      </div>
+      <button type="submit" id="loginBtn">Login</button>
+    </form>
+    <p id="auth-error" class="error"></p>
+  </div>
+
+  <div id="dashboard-container" class="container" style="display: none;">
+    <div class="header">
+      <h2 id="employee-name">Welcome</h2>
+      <p id="employee-id" class="subtext"></p>
+    </div>
+    
+    <div class="status-box">
+      <span class="status-label">CURRENT STATUS</span>
+      <h3 id="status-text">OFFLINE</h3>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn" class="btn-primary">Start Work</button>
+      <button id="stopBtn" class="btn-danger" disabled>Stop Work</button>
+      <button id="logoutBtn" class="btn-outline">Logout</button>
+    </div>
+
+    <div class="info-footer">
+      <p>Secure Enterprise Monitoring Active</p>
+      <p id="last-sync">Last sync: Never</p>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

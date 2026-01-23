@@ -1,0 +1,29 @@
+/* Global Scrollbar Styles */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+body {
+  overflow-y: auto !important; /* Force vertical scroll */
+}
+
+/* Custom Scrollbar Styling (Premium Look) */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1976d2; /* Primary blue */
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #115293; /* Darker blue */
+}

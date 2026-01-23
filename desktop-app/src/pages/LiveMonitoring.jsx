@@ -81,7 +81,27 @@ function LiveMonitoring() {
       console.log('[LiveMonitoring] 📹 Employee Video Ready:', data);
       setEmployees(prev => prev.map(emp =>
         emp.id === data.employeeId
-          ? { ...emp, is_video_ready: data.isReady }
+          ? { ...emp, is_video_ready: true } // explicit true
+          : emp
+      ));
+    });
+
+    // Handle employee disconnection (clear video readiness)
+    socketService.on('employee:disconnected', (data) => {
+      console.log('[LiveMonitoring] ❌ Employee Disconnected:', data);
+      setEmployees(prev => prev.map(emp =>
+        emp.id === data.employeeId
+          ? { ...emp, is_video_ready: false, current_status: 'OFF' }
+          : emp
+      ));
+    });
+
+    // Handle Initial Video State Sync
+    socketService.on('admin:initial-video-state', (employeeIds) => {
+      console.log('[LiveMonitoring] 🔄 Initial Video State Sync:', employeeIds);
+      setEmployees(prev => prev.map(emp =>
+        employeeIds.includes(emp.id)
+          ? { ...emp, is_video_ready: true }
           : emp
       ));
     });
@@ -92,6 +112,14 @@ function LiveMonitoring() {
         console.log('[LiveMonitoring] Socket event received:', event);
       });
     }
+
+    // Handle stream errors (e.g. offline, timeout)
+    socketService.on('admin:stream-error', (data) => {
+      console.warn('[LiveMonitoring] Stream Error:', data);
+      toast.warning(data.message || 'Unable to connect to employee.');
+      // If we were waiting, maybe close the dialog or show retry button
+      // For now, keep dialog open but show warning
+    });
 
     socketService.on('webrtc:ice-candidate', async (data) => {
       if (peerConnectionRef.current) {
