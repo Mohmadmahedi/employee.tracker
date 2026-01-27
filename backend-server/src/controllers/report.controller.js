@@ -16,8 +16,11 @@ exports.getAttendanceReport = async (req, res) => {
                 e.full_name as employee_name,
                 e.department,
                 TIMESTAMP(da.attendance_date, da.login_time) as clock_in_time,
-                da.updated_at as clock_out_time,
-                da.working_hours,
+                CASE 
+                    WHEN da.logout_time IS NOT NULL THEN TIMESTAMP(da.attendance_date, da.logout_time)
+                    ELSE da.updated_at 
+                END as clock_out_time,
+                (COALESCE(da.working_hours, 0) + COALESCE(da.idle_hours, 0) + COALESCE(da.break_hours, 0)) as working_hours,
                 CASE 
                     WHEN TIME(da.login_time) > '09:30:00' THEN 'Late' 
                     ELSE 'On Time' 
@@ -93,7 +96,7 @@ exports.getSummaryStats = async (req, res) => {
         const query = `
             SELECT 
                 COUNT(*) as present_days,
-                SUM(working_hours) as total_hours,
+                SUM(COALESCE(working_hours, 0) + COALESCE(idle_hours, 0) + COALESCE(break_hours, 0)) as total_hours,
                 SUM(CASE WHEN TIME(login_time) > '09:30:00' THEN 1 ELSE 0 END) as late_days
             FROM daily_attendance
             ${whereClause}

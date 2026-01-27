@@ -440,6 +440,20 @@ exports.fixSchema = async (req, res) => {
       logger.info('Added google_sheet_url column');
     }
 
+    // Add logout_time to daily_attendance
+    const logoutCheck = await db.query(`
+      SELECT count(*) as count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'daily_attendance'
+      AND COLUMN_NAME = 'logout_time'
+    `);
+    const logoutCount = logoutCheck[0] ? logoutCheck[0].count : 0;
+    if (logoutCount === 0) {
+      await db.query('ALTER TABLE daily_attendance ADD COLUMN logout_time TIME AFTER login_time');
+      logger.info('Added logout_time column');
+    }
+
     res.json({ success: true, message: 'Schema updated successfully' });
   } catch (error) {
     logger.error('Fix schema error:', error);

@@ -109,6 +109,19 @@ const ScreenBroadcaster = () => {
         window.trackerAPI.onStartWebRTCStream(handleStartStream);
         window.trackerAPI.onStopWebRTCStream(handleStopStream);
 
+        // RECONNECTION LOGIC:
+        // If socket reconnects (e.g. internet blink), we must re-announce we are ready.
+        // The server sees a new socket ID and needs to know this ID is "video ready".
+        const handleSocketConnect = () => {
+            console.log('[ScreenBroadcaster] 🔌 Socket connected/reconnected. Sending readiness signal...');
+            // Wait a tick to ensure stable
+            setTimeout(() => {
+                socketService.emit('employee:live-ready', {});
+            }, 1000);
+        };
+
+        socketService.on('connect', handleSocketConnect);
+
         // Listen for WebRTC Signaling from Admin (Answer, Candidates)
         // Note: socketService listeners should be cleaned up too
         socketService.on('webrtc:answer', handleAnswer);
@@ -126,6 +139,7 @@ const ScreenBroadcaster = () => {
             cleanup();
             socketService.off('webrtc:answer', handleAnswer);
             socketService.off('webrtc:ice-candidate', handleNewICECandidate);
+            socketService.off('connect', handleSocketConnect);
         };
     }, []);
 
@@ -151,9 +165,20 @@ const ScreenBroadcaster = () => {
 
             // Track connection state changes
             pc.onconnectionstatechange = () => {
-                console.log(`[ScreenBroadcaster] 🚥 Connection state: ${pc.connectionState}`);
-                if (pc.connectionState === 'failed') {
-                    console.warn('[ScreenBroadcaster] ❌ Connection FAILED. This usually means a firewall is blocking WebRTC (UDP).');
+                const state = pc.connectionState;
+                console.log(`[ScreenBroadcaster] 🚥 Connection state: ${state}`);
+
+                if (state === 'failed' || state === 'disconnected') {
+                    console.warn(`[ScreenBroadcaster] ❌ Connection ${state}. Auto-restarting stream...`);
+                    // Cleanup existing
+                    if (peerConnection.current) {
+                        peerConnection.current.close();
+                        peerConnection.current = null;
+                    }
+
+                    // Announce readiness again so server can re-trigger us using activeSubscriptions
+                    console.log('[ScreenBroadcaster] 🔄 Re-announcing readiness to trigger backend auto-restore...');
+                    socketService.emit('employee:live-ready', {});
                 }
             };
 

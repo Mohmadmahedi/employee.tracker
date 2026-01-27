@@ -148,7 +148,7 @@ CREATE TABLE attendance_sessions (
     id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
     employee_id CHAR(36) NOT NULL,
     session_date DATE NOT NULL,
-    state ENUM('WORKING', 'BREAK', 'IDLE', 'OFFLINE') NOT NULL,
+    state ENUM('WORKING', 'BREAK', 'IDLE', 'OFFLINE', 'OFF') NOT NULL,
     timestamp DATETIME NOT NULL,
     pc_name VARCHAR(255),
     ip_address VARCHAR(50),

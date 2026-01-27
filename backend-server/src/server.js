@@ -27,8 +27,15 @@ const { monthlyReportJob } = require('./services/cron.service');
 
 const app = express();
 const server = http.createServer(app);
+
+// TRUST PROXY (Required for Render/Cloud hosting)
+app.set('trust proxy', 1);
+
 const io = socketIO(server, {
   maxHttpBufferSize: 1e8, // 100 MB
+  pingTimeout: 60000,     // Increase timeout to 60s
+  pingInterval: 25000,    // Send ping every 25s to keep connection alive
+  transports: ['websocket', 'polling'], // Allow fallback
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
@@ -45,6 +52,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Keep-Alive Endpoint (For Automation)
+app.get('/api/keep-alive', (req, res) => {
+  res.json({
+    status: 'online',
+    serverTime: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -89,6 +105,21 @@ app.get('/api/fix-db', async (req, res) => {
   }
 });
 
+// ALERT TYPE FIX - Run this if you see "Data truncated" errors
+app.get('/api/fix-db-alerts', async (req, res) => {
+  try {
+    const db = require('./config/database');
+    // Modify the enum to include the long types or just change to VARCHAR for flexibility
+    // The error is likely because the ENUM definition in schema doesn't match what we are sending, 
+    // OR we are sending 'RESTRICTED_APP_DETECTED' but the enum only has 'UNINSTALL_ATTEMPT', etc.
+    // The safest fix is to change it to a VARCHAR(50) so it accepts any string.
+    await db.query(`ALTER TABLE tamper_alerts MODIFY COLUMN alert_type VARCHAR(50) NOT NULL`);
+    res.send('<h1>✓ Alerts Fixed!</h1><p>The alerts table has been updated to accept longer types. You is good to go.</p>');
+  } catch (error) {
+    res.status(500).send(`<h1>Error</h1><p>${error.message}</p>`);
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   logger.error(err.stack);
@@ -126,6 +157,12 @@ io.use((socket, next) => {
 
 // Map to track connected employees
 const connectedEmployees = new Map(); // socket.id -> employeeId
+const employeeVideoStatus = new Map(); // employeeId -> boolean (isReady)
+const pendingVideoRequests = new Map(); // employeeId -> [{ adminSocketId, adminId, timeout }]
+
+// PERSISTENT SUBSCRIPTIONS: employeeId -> Set<adminSocketId>
+// Tracks which admins are *trying* to watch an employee, even if the employee is temporarily offline.
+const activeSubscriptions = new Map();
 
 // WebSocket for real-time features
 io.on('connection', (socket) => {
@@ -147,15 +184,12 @@ io.on('connection', (socket) => {
 
   // Employee heartbeat
   socket.on('employee:heartbeat', async (data) => {
+    // ... (keep existing)
     try {
-      // Ensure they are in their room if they reconnected without full handshake logic
-      // Also update the socket user data for disconnect tracking
       if (data.employeeId) {
-        socket.user = { id: data.employeeId, ...socket.user }; // minimal user object
+        socket.user = { id: data.employeeId, ...socket.user };
         socket.join(`employee:${data.employeeId}`);
       }
-
-      // Broadcast to admin dashboard
       io.to('admin-room').emit('employee:activity', {
         employeeId: data.employeeId,
         status: data.status,
@@ -166,25 +200,69 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle Disconnect
-  socket.on('disconnect', () => {
-    if (socket.user && socket.user.id) {
-      console.log(`[Socket] User ${socket.user.id} disconnected`);
-      io.to('admin-room').emit('employee:disconnected', {
-        employeeId: socket.user.id
-      });
-    }
-  });
-
   // Employee signal that video component is mounted and ready
   socket.on('employee:live-ready', () => {
     if (socket.user && socket.user.id) {
-      console.log(`[Video] Employee ${socket.user.id} is ready for live streaming (Socket ${socket.id})`);
+      const empId = socket.user.id;
+      const roomName = `employee:${empId}`;
+      socket.join(roomName);
+      console.log(`[Socket] Video Socket for ${empId} forced into room: ${roomName}`);
+
+      // Mark as Ready
+      employeeVideoStatus.set(empId, true);
+      console.log(`[Video] Employee ${empId} is ready for live streaming (Socket ${socket.id})`);
+
+      // Notify admin
       io.to('admin-room').emit('employee:video-ready', {
-        employeeId: socket.user.id,
+        employeeId: empId,
         isReady: true,
         socketId: socket.id
       });
+
+      // 1. Process Pending Queue (One-time requests that failed/timed out)
+      if (pendingVideoRequests.has(empId)) {
+        const queue = pendingVideoRequests.get(empId);
+        console.log(`[Queue] Processing ${queue.length} pending requests for ${empId}`);
+
+        queue.forEach(req => {
+          clearTimeout(req.timeout); // Clear the fail-safe timeout
+          io.to(roomName).emit(`employee:${empId}:start-stream`, {
+            adminId: req.adminId,
+            adminSocketId: req.adminSocketId
+          });
+          console.log(`[Queue] 🚀 Launched deferred stream for Admin ${req.adminId}`);
+          
+          // Also add to active subscriptions for persistence
+          if (!activeSubscriptions.has(empId)) activeSubscriptions.set(empId, new Set());
+          activeSubscriptions.get(empId).add(req.adminSocketId);
+        });
+
+        pendingVideoRequests.delete(empId);
+      }
+
+      // 2. CHECK ACTIVE SUBSCRIPTIONS (Auto-Restore)
+      // If admins were watching this employee (or trying to) before they reconnected/rebooted.
+      if (activeSubscriptions.has(empId)) {
+        const admins = activeSubscriptions.get(empId);
+        if (admins.size > 0) {
+            console.log(`[AutoRestore] Found ${admins.size} active listeners for ${empId}. Restoring streams...`);
+            admins.forEach(adminSocketId => {
+                // Check if admin is still connected
+                const adminSocket = io.sockets.sockets.get(adminSocketId);
+                if (adminSocket) {
+                    // Send start command
+                    io.to(roomName).emit(`employee:${empId}:start-stream`, {
+                        adminSocketId: adminSocketId
+                        // We don't necessarily have adminId here easily without lookups, but usually adminSocketId is enough for signaling
+                    });
+                    console.log(`[AutoRestore] 🔄 Restoring stream for Admin Socket ${adminSocketId}`);
+                } else {
+                    // Admin disconnected, remove from set
+                    admins.delete(adminSocketId);
+                }
+            });
+        }
+      }
     }
   });
 
@@ -192,28 +270,58 @@ io.on('connection', (socket) => {
   socket.on('admin:request-live-screen', async (data) => {
     try {
       const { employeeId, adminId } = data;
-
-      // Check if employee is actually connected via socket
       const employeeRoom = `employee:${employeeId}`;
-      const connectedClients = io.sockets.adapter.rooms.get(employeeRoom);
-
       console.log(`[LiveScreen] Admin ${adminId} requested screen for ${employeeId}`);
 
-      if (!connectedClients || connectedClients.size === 0) {
-        console.log(`[LiveScreen] ❌ Employee ${employeeId} not connected for signalling`);
-        return socket.emit('admin:stream-error', {
-          employeeId,
-          message: 'Employee is not connected for live monitoring. Please wait a few seconds for their connection to stabilize.'
-        });
+      // ADD TO ACTIVE SUBSCRIPTIONS
+      if (!activeSubscriptions.has(employeeId)) activeSubscriptions.set(employeeId, new Set());
+      activeSubscriptions.get(employeeId).add(socket.id);
+      console.log(`[LiveScreen] Admin ${socket.id} added to active subscriptions for ${employeeId}`);
+
+      // CHECK 1: Is employee completely offline?
+      // We check if the room exists and has members.
+      const room = io.sockets.adapter.rooms.get(employeeRoom);
+      if (!room || room.size === 0) {
+        console.log(`[LiveScreen] ❌ Employee ${employeeId} offline.`);
+        // We do NOT return error immediately if we want to wait for them to come online
+        // But for UI feedback, we can say "Waiting..."
+        socket.emit('admin:stream-status', { status: 'waiting_for_employee', message: 'Employee offline, waiting for connection...' });
+        return; 
       }
 
-      console.log(`[LiveScreen] 📤 Sending start-stream to room ${employeeRoom}`);
+      // CHECK 2: Is their Video Component ready?
+      if (!employeeVideoStatus.get(employeeId)) {
+        console.log(`[LiveScreen] ⏳ Employee online but Video NOT ready. Queuing request...`);
 
-      // Notify employee app in their specific room
+        // Queue this request
+        const timeout = setTimeout(() => {
+          // Fail-safe: If they never become ready after 10s, cancel.
+          const q = pendingVideoRequests.get(employeeId) || [];
+          const filtered = q.filter(item => item.adminSocketId !== socket.id);
+          if (filtered.length === 0) pendingVideoRequests.delete(employeeId);
+          else pendingVideoRequests.set(employeeId, filtered);
+
+          // We don't error out anymore, we just keep waiting because it's in activeSubscriptions
+          socket.emit('admin:stream-status', { status: 'waiting_for_employee', message: 'Waiting for employee app initialization...' });
+        }, 10000);
+
+        const newItem = { adminSocketId: socket.id, adminId, timeout };
+
+        if (pendingVideoRequests.has(employeeId)) {
+          pendingVideoRequests.get(employeeId).push(newItem);
+        } else {
+          pendingVideoRequests.set(employeeId, [newItem]);
+        }
+        return;
+      }
+
+      // If Ready, send immediately
+      console.log(`[LiveScreen] 📤 Sending start-stream to room ${employeeRoom}`);
       io.to(employeeRoom).emit(`employee:${employeeId}:start-stream`, {
         adminId,
         adminSocketId: socket.id
       });
+
     } catch (error) {
       logger.error('Live screen request error:', error);
     }
@@ -222,7 +330,25 @@ io.on('connection', (socket) => {
   // Admin stop live screen request
   socket.on('admin:stop-live-screen', (data) => {
     const { employeeId } = data;
+    
+    // REMOVE FROM SUBSCRIPTIONS
+    if (activeSubscriptions.has(employeeId)) {
+        activeSubscriptions.get(employeeId).delete(socket.id);
+        console.log(`[LiveScreen] Admin ${socket.id} unsubscribed from ${employeeId}`);
+    }
+
     io.emit(`employee:${employeeId}:stop-stream`, { adminSocketId: socket.id });
+  });
+
+  // Handle Stream Failures (Feedback Loop)
+  socket.on('employee:stream-failed', (data) => {
+    console.log(`[Stream Error] Employee ${socket.id} failed to stream: ${data.error}`);
+    if (data.targetSocketId) {
+      io.to(data.targetSocketId).emit('admin:stream-error', {
+        employeeId: socket.user?.id || 'Unknown',
+        message: data.error
+      });
+    }
   });
 
   // WebRTC Signaling Events
@@ -285,11 +411,23 @@ io.on('connection', (socket) => {
   socket.on('admin:join', (adminId) => {
     socket.join('admin-room');
     console.log('Admin joined:', adminId);
+
+    // SEND INITIAL STATE SYNC
+    // Send list of all employees who are currently "Video Ready"
+    const readyEmployees = [];
+    employeeVideoStatus.forEach((isReady, id) => {
+      if (isReady) readyEmployees.push(id);
+    });
+
+    if (readyEmployees.length > 0) {
+      console.log(`[Sync] Sending video-ready list to new Admin: ${readyEmployees.length} employees`);
+      socket.emit('admin:initial-video-state', readyEmployees);
+    }
   });
 
   // Config update notification
   socket.on('admin:config-updated', (data) => {
-    // Notify specific employee or all employees
+    // ... (keep existing)
     if (data.employeeId) {
       io.emit(`employee:${data.employeeId}:config-update`, data.settings);
     } else {
@@ -297,19 +435,67 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle Disconnect
   socket.on('disconnect', () => {
-    const employeeId = connectedEmployees.get(socket.id);
-    if (employeeId) {
-      console.log(`Employee disconnected: ${employeeId}, Socket: ${socket.id}`);
-      // Notify admins immediately
-      io.to('admin-room').emit('employee:activity', {
-        employeeId: employeeId,
-        status: 'OFF',
-        timestamp: new Date().toISOString()
+    // SECURITY: Ensure we don't run employee cleanup for Admins
+    if (socket.user && (socket.user.type === 'admin' || socket.user.role === 'SUPER_ADMIN')) {
+      console.log(`[Socket] Admin ${socket.user.id} disconnected.`);
+      // If admin disconnects, we should probably remove their subscriptions
+      // But we need to iterate the map since it's keyed by employeeId
+      activeSubscriptions.forEach((admins, employeeId) => {
+          if (admins.has(socket.id)) {
+              admins.delete(socket.id);
+              console.log(`[Cleanup] Removed Admin subscription for ${employeeId} on disconnect`);
+              // Optionally notify employee to stop streaming to this admin (if supporting multi-cast someday, current implementation usually stops all)
+              io.emit(`employee:${employeeId}:stop-stream`, { adminSocketId: socket.id });
+          }
       });
+      return;
+    }
+
+    let empId = socket.user?.id;
+
+    // Fallback: check map provided earlier in handshake
+    if (!empId && connectedEmployees.has(socket.id)) {
+      empId = connectedEmployees.get(socket.id);
+    }
+
+    if (empId) {
+      console.log(`[Socket] User ${empId} socket disconnected: ${socket.id}`);
       connectedEmployees.delete(socket.id);
+
+      // CRITICAL FIX: Only notify admin if ALL sockets for this employee are gone.
+      // We check the specific employee room size.
+      const roomName = `employee:${empId}`;
+      const room = io.sockets.adapter.rooms.get(roomName);
+
+      if (!room || room.size === 0) {
+        console.log(`[Socket] Employee ${empId} fully offline (no sockets left).`);
+
+        // Notify admins
+        io.to('admin-room').emit('employee:disconnected', {
+          employeeId: empId
+        });
+
+        // Clear video status and pending requests
+        employeeVideoStatus.delete(empId);
+        pendingVideoRequests.delete(empId);
+        
+        // NOTE: We do NOT delete from activeSubscriptions here.
+        // We want to remember that an admin was watching, so when they reconnect, we resume.
+
+        // Also send activity update to OFF
+        io.to('admin-room').emit('employee:activity', {
+          employeeId: empId,
+          status: 'OFF',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.log(`[Socket] Employee ${empId} still has ${room.size} active socket(s). Ignoring disconnect.`);
+      }
     } else {
-      console.log('Client disconnected:', socket.id);
+      // Just standard cleanup if it was tracked by socketID
+      if (connectedEmployees.has(socket.id)) connectedEmployees.delete(socket.id);
     }
   });
 });

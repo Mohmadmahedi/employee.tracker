@@ -370,13 +370,22 @@ class TrackerService {
     }
 
     connectSocket() {
-        if (this.socket) this.socket.disconnect();
+        if (this.socket) {
+            console.log('[TrackerService] Disconnecting existing socket before new connection...');
+            this.socket.disconnect();
+            this.socket.removeAllListeners(); // Clean slate
+        }
 
         console.log(`[TrackerService] Connecting socket with employeeId: ${this.employeeId}`);
         this.logToFile(`Connecting socket with employeeId: ${this.employeeId}`);
 
         this.socket = io(this.socketUrl, {
-            auth: { token: this.token }
+            auth: { token: this.token },
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
         });
 
         this.socket.on('connect', () => {
@@ -384,6 +393,15 @@ class TrackerService {
             console.log(`[TrackerService] Listening for: employee:${this.employeeId}:start-stream`);
             this.logToFile(`Socket connected. Listening for employee:${this.employeeId}:start-stream`);
             this.sendHeartbeat(); // Immediate sync on connect
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            console.log(`[TrackerService] Socket disconnected: ${reason}`);
+            this.logToFile(`Socket disconnected: ${reason}`);
+        });
+
+        this.socket.on('connect_error', (error) => {
+            console.log(`[TrackerService] Socket connect error: ${error.message}`);
         });
 
         // Handle live screen request from admin -> Delegate to Renderer (WebRTC)

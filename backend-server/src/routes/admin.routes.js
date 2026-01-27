@@ -17,7 +17,8 @@ router.get('/employees', async (req, res) => {
   try {
     const employees = await db.query(`
       SELECT e.id, e.email, e.full_name, e.department, e.is_active, e.last_seen, e.pc_name, e.google_sheet_url,
-             (SELECT state FROM attendance_sessions WHERE employee_id = e.id ORDER BY timestamp DESC LIMIT 1) as current_status
+             (SELECT state FROM attendance_sessions WHERE employee_id = e.id ORDER BY timestamp DESC LIMIT 1) as current_status,
+             (SELECT logout_time FROM daily_attendance WHERE employee_id = e.id AND attendance_date = CURDATE() LIMIT 1) as logout_time
       FROM employees e
       ORDER BY e.full_name ASC
     `);
@@ -182,4 +183,38 @@ router.delete('/employees/:id', async (req, res) => {
   }
 });
 
+/**
+ * Run database migrations
+ * This is a one-time operation to fix schema issues
+ */
+router.post('/run-migration', async (req, res) => {
+  try {
+    console.log('Running manual migration: Adding OFF to attendance_sessions.state...');
+
+    // Check if the enum already contains 'OFF'
+    const [columns] = await db.query("SHOW COLUMNS FROM attendance_sessions LIKE 'state'");
+    const type = columns[0].Type; // e.g., enum('WORKING','BREAK','IDLE','OFFLINE')
+
+    if (!type.includes("'OFF'")) {
+      await db.query(`ALTER TABLE attendance_sessions MODIFY COLUMN state ENUM('WORKING', 'BREAK', 'IDLE', 'OFFLINE', 'OFF') NOT NULL`);
+      console.log('✓ Successfully added OFF to attendance_sessions state enum');
+    } else {
+      console.log('! OFF already exists in attendance_sessions state enum');
+    }
+
+    res.json({
+      success: true,
+      message: 'Migration completed successfully'
+    });
+  } catch (error) {
+    logger.error('Migration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Migration failed',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
+

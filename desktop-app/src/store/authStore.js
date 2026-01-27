@@ -52,14 +52,28 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: () => {
-    // Stop tracker
+    // 1. Force Stop Tracker (Employee Process)
     if (window.trackerAPI) {
-      window.trackerAPI.stopTracking();
+      console.log('[AuthStore] Stopping tracker...');
+      try {
+        window.trackerAPI.stopTracking();
+      } catch (e) { console.error('Error stopping tracker:', e); }
     }
 
-    socketService.disconnect();
+    // 2. Clear Socket
+    if (socketService) socketService.disconnect();
+
+    // 3. Clear Storage
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken'); // Ensure this is cleared if used
+
+    // 4. Reset State
     set({ isAuthenticated: false, user: null, token: null, isChecking: false });
+
+    // 5. Hard Reload to kill any lingering background listeners (CRITICAL for "Ghost" fix)
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   },
 
   checkAuth: async () => {

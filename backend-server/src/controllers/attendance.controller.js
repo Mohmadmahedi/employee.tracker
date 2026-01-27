@@ -17,10 +17,13 @@ exports.heartbeat = async (req, res) => {
         const formattedTimestamp = now.toISOString().slice(0, 19).replace('T', ' '); // YYYY-MM-DD HH:MM:SS
 
         // 1. Record the heartbeat session
+        // Map 'OFF' to 'OFF' (which we added to the ENUM in the migration script)
+        const dbStatus = status === 'OFF' ? 'OFF' : (status || 'WORKING');
+
         await db.query(
             `INSERT INTO attendance_sessions (id, employee_id, session_date, state, timestamp, pc_name, ip_address)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [uuidv4(), employeeId, date, status || 'WORKING', formattedTimestamp, pc_name || null, ip_address || req.ip]
+            [uuidv4(), employeeId, date, dbStatus, formattedTimestamp, pc_name || null, ip_address || req.ip]
         );
 
         // 2. Update daily attendance summary
@@ -31,7 +34,15 @@ exports.heartbeat = async (req, res) => {
         );
 
         if (existing) {
-            const intervalHours = 5 / 60; // Assuming 5 min heartbeat
+            // Calculate actual interval since last update to be precise
+            // Default to 5 mins if no updated_at exists yet
+            const lastUpdate = new Date(existing.updated_at || existing.login_time || Date.now());
+            const diffMs = now - lastUpdate;
+            const diffHours = Math.max(0, diffMs / (1000 * 60 * 60));
+
+            // Limit interval to 15 mins to prevent huge jumps if PC was asleep
+            const intervalHours = Math.min(diffHours, 0.25);
+
             let updateSql = 'UPDATE daily_attendance SET updated_at = NOW()';
             const params = [];
 
@@ -46,22 +57,20 @@ exports.heartbeat = async (req, res) => {
                 params.push(intervalHours);
             }
 
+            if (status === 'OFF') {
+                updateSql += ', logout_time = CURRENT_TIME()';
+            }
+
             updateSql += ' WHERE id = ?';
             params.push(existing.id);
 
             await db.query(updateSql, params);
-
-            // Calculate overtime
-            await db.query(
-                'UPDATE daily_attendance SET overtime_hours = CASE WHEN working_hours > 8 THEN working_hours - 8 ELSE 0 END WHERE id = ?',
-                [existing.id]
-            );
         } else {
             // Create new daily record
             await db.query(
-                `INSERT INTO daily_attendance (id, employee_id, attendance_date, login_time, working_hours, break_hours, idle_hours, overtime_hours)
-                 VALUES (?, ?, ?, CURRENT_TIME(), ?, 0, 0, 0)`,
-                [uuidv4(), employeeId, date, status === 'WORKING' ? 5 / 60 : 0]
+                `INSERT INTO daily_attendance (id, employee_id, attendance_date, login_time, updated_at, working_hours, break_hours, idle_hours, overtime_hours)
+                 VALUES (?, ?, ?, CURRENT_TIME(), NOW(), ?, 0, 0, 0)`,
+                [uuidv4(), employeeId, date, status === 'WORKING' ? 0.01 : 0] // Start with 30 seconds worth for first heartbeat
             );
         }
 
