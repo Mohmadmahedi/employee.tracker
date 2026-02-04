@@ -1,29 +1,356 @@
-/* Global Scrollbar Styles */
+/* ========================================
+   ENHANCED GLOBAL STYLES - Premium UI
+   ======================================== */
+
+/* Base Reset */
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow-x: hidden; /* Prevent horizontal scroll */
+  overflow-x: hidden;
 }
 
 body {
-  overflow-y: auto !important; /* Force vertical scroll */
+  overflow-y: auto !important;
+  background: #0a0b10;
 }
 
-/* Custom Scrollbar Styling (Premium Look) */
+/* Smooth Scroll Behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ========================================
+   PREMIUM SCROLLBAR STYLES
+   ======================================== */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1976d2; /* Primary blue */
-  border-radius: 5px;
+  background: linear-gradient(180deg, #1976d2 0%, #673ab7 100%);
+  border-radius: 10px;
+  transition: all 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #115293; /* Darker blue */
+  background: linear-gradient(180deg, #2196f3 0%, #9c27b0 100%);
+  box-shadow: 0 0 10px rgba(103, 58, 183, 0.5);
+}
+
+/* ========================================
+   SELECTION COLORS
+   ======================================== */
+::selection {
+  background: rgba(103, 58, 183, 0.3);
+  color: inherit;
+}
+
+::-moz-selection {
+  background: rgba(103, 58, 183, 0.3);
+  color: inherit;
+}
+
+/* ========================================
+   ANIMATED BACKGROUND GRID
+   ======================================== */
+.animated-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(90deg, rgba(103, 58, 183, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(103, 58, 183, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridMove 20s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes gridMove {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(50px, 50px); }
+}
+
+/* ========================================
+   FLOATING PARTICLES
+   ======================================== */
+.particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(103, 58, 183, 0.3);
+  border-radius: 50%;
+  animation: float 15s infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(100vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* ========================================
+   PULSING GLOW EFFECTS
+   ======================================== */
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(103, 58, 183, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(103, 58, 183, 0.6);
+  }
+}
+
+/* ========================================
+   GRADIENT TEXT ANIMATION
+   ======================================== */
+.gradient-text {
+  background: linear-gradient(90deg, #1976d2, #673ab7, #9c27b0, #673ab7, #1976d2);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientText 5s ease infinite;
+}
+
+@keyframes gradientText {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ========================================
+   GLASSMORPHISM UTILITIES
+   ======================================== */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-dark {
+  background: rgba(10, 11, 16, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ========================================
+   NEON BORDER ANIMATION
+   ======================================== */
+.neon-border {
+  position: relative;
+}
+
+.neon-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(90deg, #1976d2, #673ab7, #9c27b0, #673ab7, #1976d2);
+  background-size: 300% 100%;
+  border-radius: inherit;
+  animation: neonBorder 3s ease infinite;
+  z-index: -1;
+  filter: blur(5px);
+  opacity: 0.5;
+}
+
+@keyframes neonBorder {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ========================================
+   LOADING SKELETON SHIMMER
+   ======================================== */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========================================
+   RIPPLE EFFECT FOR BUTTONS
+   ======================================== */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 10%, transparent 10.01%);
+  background-repeat: no-repeat;
+  background-position: 50%;
+  transform: scale(10, 10);
+  opacity: 0;
+  transition: transform 0.5s, opacity 0.5s;
+}
+
+.ripple:active::after {
+  transform: scale(0, 0);
+  opacity: 0.3;
+  transition: 0s;
+}
+
+/* ========================================
+   HOVER LIFT EFFECT
+   ======================================== */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+}
+
+/* ========================================
+   FADE IN ANIMATIONS
+   ======================================== */
+.fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.fade-in-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.fade-in-delay-3 { animation-delay: 0.3s; opacity: 0; }
+.fade-in-delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+/* ========================================
+   INPUT FIELD FOCUS GLOW
+   ======================================== */
+.input-glow:focus-within {
+  box-shadow: 0 0 0 2px rgba(103, 58, 183, 0.3),
+              0 0 20px rgba(103, 58, 183, 0.2);
+}
+
+/* ========================================
+   SIDEBAR ACTIVE INDICATOR
+   ======================================== */
+.sidebar-active {
+  position: relative;
+}
+
+.sidebar-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, #1976d2, #673ab7);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px rgba(103, 58, 183, 0.5);
+}
+
+/* ========================================
+   TYPING ANIMATION FOR TEXT
+   ======================================== */
+.typing {
+  overflow: hidden;
+  border-right: 2px solid #673ab7;
+  white-space: nowrap;
+  animation: typing 3s steps(30) 1s forwards,
+             blink 0.75s step-end infinite;
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink {
+  50% { border-color: transparent; }
+}
+
+/* ========================================
+   SPINNING LOADER
+   ======================================== */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(103, 58, 183, 0.2);
+  border-top-color: #673ab7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   RESPONSIVE UTILITIES
+   ======================================== */
+@media (max-width: 600px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
 }

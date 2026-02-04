@@ -27,7 +27,7 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 
 // Get base URL for file serving (strip /api from API_URL)
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'https://attendance-backend-7yn8.onrender.com/api').replace('/api', '');
 
 function ScreenRecordings() {
     const [recordings, setRecordings] = useState([]);

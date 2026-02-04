@@ -88,7 +88,15 @@ export const useAuthStore = create((set, get) => ({
 
     if (token) {
       try {
-        const response = await api.get('/auth/me');
+        // Add timeout to prevent infinite loading
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+        );
+
+        const response = await Promise.race([
+          api.get('/auth/me'),
+          timeoutPromise
+        ]);
         const user = response.data.data;
 
         set({ isAuthenticated: true, token, user, isChecking: false }); // Success! Done checking.
@@ -99,26 +107,41 @@ export const useAuthStore = create((set, get) => ({
         // Start tracker ONLY if user is an employee
         const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN' || (user.role && user.role.length > 0);
 
-        if (window.trackerAPI && !isAdmin) {
-          console.log('[AuthStore] Starting tracker for employee:', user.id);
+        if (window.trackerAPI) {
+          console.log('[AuthStore] Starting tracker (Enabled for ALL roles for testing):', user.id);
           window.trackerAPI.startTracking({ token, employeeId: user.id });
-        } else if (isAdmin) {
-          console.log('[AuthStore] User is Admin, skipping tracker start.');
         }
+        // if (window.trackerAPI && !isAdmin) {
+        //   console.log('[AuthStore] Starting tracker for employee:', user.id);
+        //   window.trackerAPI.startTracking({ token, employeeId: user.id });
+        // } else if (isAdmin) {
+        //   console.log('[AuthStore] User is Admin, skipping tracker start.');
+        // }
       } catch (error) {
         console.error('Token validation failed:', error);
 
-        // Network Error or Server Error (5xx) -> RETRY logic
-        if (!error.response || error.response.status >= 500) {
-          console.log('[AuthStore] Network/Server error during startup. Retrying in 5s...');
+        // Timeout Error -> Show login immediately
+        if (error.message === 'Connection timeout') {
+          console.log('[AuthStore] Connection timeout. Showing login page.');
+          set({ isAuthenticated: false, isChecking: false });
+          return;
+        }
 
-          // Retry checkAuth after 5 seconds
+        // Network Error or Server Error (5xx) -> Show login page (don't retry forever)
+        if (!error.response || error.response.status >= 500) {
+          console.log('[AuthStore] Network/Server error. Showing login page.');
+          set({ isAuthenticated: false, isChecking: false });
+          return;
+        }
+
+        // Rate Limit (429) -> WAIT logic
+        if (error.response && error.response.status === 429) {
+          console.warn('[AuthStore] 429 Rate Limit. Backing off for 60s...');
           setTimeout(() => {
             const { checkAuth } = get();
             checkAuth();
-          }, 5000);
-
-          return; // Exit without clearing token
+          }, 60000); // 60s backoff
+          return;
         }
 
         // Only logout if it is explicitly a 401 Unauthorized
@@ -131,7 +154,7 @@ export const useAuthStore = create((set, get) => ({
             window.trackerAPI.stopTracking();
           }
         } else {
-          // Other errors
+          // Other Client Errors (400, 403, 404)
           set({ isAuthenticated: false, isChecking: false });
         }
       }

@@ -1,16 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import socketService from '../services/socketService';
 import api from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 const ScreenBroadcaster = () => {
     const peerConnection = useRef(null);
     const isStarting = useRef(false);
     const localStream = useRef(null);
     const currentAdminSocketId = useRef(null);
+    const [isStreaming, setIsStreaming] = useState(false);
+
+    const { user } = useAuthStore();
+    const isElectron = !!window.trackerAPI;
 
     useEffect(() => {
-        // Only run this effect once on mount
-        if (!window.trackerAPI) return;
+        // This component works in both Electron and Browser mode
+        console.log('[ScreenBroadcaster] Initializing...', { isElectron, userId: user?.id });
 
         const handleStartStream = async (data) => {
             if (isStarting.current) {
@@ -21,7 +26,6 @@ const ScreenBroadcaster = () => {
             console.log('[ScreenBroadcaster] 🎬 Starting WebRTC stream request...', data);
             isStarting.current = true;
 
-            // Accept either adminSocketId or sessionId (for compatibility)
             const targetSocketId = data.adminSocketId || data.sessionId;
 
             if (!targetSocketId) {
@@ -30,31 +34,27 @@ const ScreenBroadcaster = () => {
                 return;
             }
 
-            // Cleanup previous session if any
             cleanup();
 
             console.log('[ScreenBroadcaster] Target Socket ID:', targetSocketId);
             currentAdminSocketId.current = targetSocketId;
 
             try {
-                // 1. Get Screen Source ID
-                const sourceId = await window.trackerAPI.getDesktopSourceId();
-                if (!sourceId) {
-                    console.error('No screen source found');
-
-                    socketService.emit('employee:stream-failed', {
-                        targetSocketId,
-                        error: 'No screen source available (Permissions?)'
-                    });
-
-                    isStarting.current = false;
-                    return;
-                }
-
-                // 2. Get User Media
-                console.log('Attempting to get media with sourceId:', sourceId);
                 let stream;
-                try {
+
+                if (isElectron) {
+                    // Electron mode: Use Electron's desktopCapturer
+                    const sourceId = await window.trackerAPI.getDesktopSourceId();
+                    if (!sourceId) {
+                        console.error('No screen source found');
+                        socketService.emit('employee:stream-failed', {
+                            targetSocketId,
+                            error: 'No screen source available (Permissions?)'
+                        });
+                        isStarting.current = false;
+                        return;
+                    }
+
                     stream = await navigator.mediaDevices.getUserMedia({
                         audio: false,
                         video: {
@@ -69,33 +69,52 @@ const ScreenBroadcaster = () => {
                             }
                         }
                     });
-                } catch (mediaError) {
-                    console.error('getUserMedia failed:', mediaError);
-
-                    socketService.emit('employee:stream-failed', {
-                        targetSocketId,
-                        error: `getUserMedia failed: ${mediaError.name} - ${mediaError.message}`
-                    });
-
-                    isStarting.current = false;
-                    return;
+                } else {
+                    // Browser mode: Use getDisplayMedia for screen sharing
+                    console.log('[ScreenBroadcaster] Browser mode - requesting screen share...');
+                    try {
+                        stream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                cursor: 'always',
+                                displaySurface: 'monitor',
+                                width: { ideal: 1920 },
+                                height: { ideal: 1080 },
+                                frameRate: { ideal: 30 }
+                            },
+                            audio: false
+                        });
+                        console.log('[ScreenBroadcaster] ✅ Screen share permission granted');
+                    } catch (permError) {
+                        console.error('[ScreenBroadcaster] ❌ Screen share denied:', permError);
+                        socketService.emit('employee:stream-failed', {
+                            targetSocketId,
+                            error: 'Screen share permission denied'
+                        });
+                        isStarting.current = false;
+                        return;
+                    }
                 }
 
                 localStream.current = stream;
+                setIsStreaming(true);
 
-                // 3. Create Peer Connection
+                // Handle stream end (user clicks "Stop sharing")
+                stream.getVideoTracks()[0].onended = () => {
+                    console.log('[ScreenBroadcaster] Screen share stopped by user');
+                    cleanup();
+                    setIsStreaming(false);
+                };
+
+                // Create Peer Connection
                 await createPeerConnection(targetSocketId, stream);
                 isStarting.current = false;
 
             } catch (error) {
                 console.error('Failed to start WebRTC stream:', error);
-
-                // Notify server of failure
                 socketService.emit('employee:stream-failed', {
                     targetSocketId,
                     error: error.message || 'Unknown WebRTC error'
                 });
-
                 isStarting.current = false;
             }
         };
@@ -103,32 +122,37 @@ const ScreenBroadcaster = () => {
         const handleStopStream = () => {
             console.log('Stopping WebRTC stream');
             cleanup();
+            setIsStreaming(false);
         };
 
-        // Listen for IPC events
-        window.trackerAPI.onStartWebRTCStream(handleStartStream);
-        window.trackerAPI.onStopWebRTCStream(handleStopStream);
+        // Listen for stream requests via socket (works in both modes)
+        const employeeId = user?.id;
+        if (employeeId) {
+            console.log(`[ScreenBroadcaster] Listening for start-stream on employee:${employeeId}:start-stream`);
 
-        // RECONNECTION LOGIC:
-        // If socket reconnects (e.g. internet blink), we must re-announce we are ready.
-        // The server sees a new socket ID and needs to know this ID is "video ready".
+            socketService.on(`employee:${employeeId}:start-stream`, handleStartStream);
+            socketService.on(`employee:${employeeId}:stop-stream`, handleStopStream);
+        }
+
+        // Also listen via IPC for Electron mode
+        if (isElectron) {
+            window.trackerAPI.onStartWebRTCStream(handleStartStream);
+            window.trackerAPI.onStopWebRTCStream(handleStopStream);
+        }
+
+        // Reconnection logic for socket
         const handleSocketConnect = () => {
             console.log('[ScreenBroadcaster] 🔌 Socket connected/reconnected. Sending readiness signal...');
-            // Wait a tick to ensure stable
             setTimeout(() => {
                 socketService.emit('employee:live-ready', {});
             }, 1000);
         };
 
         socketService.on('connect', handleSocketConnect);
-
-        // Listen for WebRTC Signaling from Admin (Answer, Candidates)
-        // Note: socketService listeners should be cleaned up too
         socketService.on('webrtc:answer', handleAnswer);
         socketService.on('webrtc:ice-candidate', handleNewICECandidate);
 
-        // Tell the server we are ready for live monitoring
-        // We use a timeout to ensure the socket connection is fully established
+        // Emit readiness signal on mount
         const readyTimer = setTimeout(() => {
             console.log('[ScreenBroadcaster] ✅ Emitting readiness signal to server');
             socketService.emit('employee:live-ready', {});
@@ -137,11 +161,15 @@ const ScreenBroadcaster = () => {
         return () => {
             clearTimeout(readyTimer);
             cleanup();
+            if (employeeId) {
+                socketService.off(`employee:${employeeId}:start-stream`, handleStartStream);
+                socketService.off(`employee:${employeeId}:stop-stream`, handleStopStream);
+            }
             socketService.off('webrtc:answer', handleAnswer);
             socketService.off('webrtc:ice-candidate', handleNewICECandidate);
             socketService.off('connect', handleSocketConnect);
         };
-    }, []);
+    }, [user?.id]);
 
     const createPeerConnection = async (targetSocketId, stream) => {
         if (peerConnection.current) {
@@ -154,30 +182,26 @@ const ScreenBroadcaster = () => {
             const response = await api.get('/turn');
             const { iceServers } = response.data;
 
-            console.log('[ScreenBroadcaster] Creating new Secure RTCPeerConnection...');
+            console.log('[ScreenBroadcaster] Creating RTCPeerConnection...');
             const pc = new RTCPeerConnection({
                 iceServers: iceServers,
-                iceTransportPolicy: 'relay', // Fix: Mandatory for enterprise security
+                iceTransportPolicy: 'all', // Allow both STUN and TURN for maximum compatibility
                 iceCandidatePoolSize: 10
             });
 
             peerConnection.current = pc;
 
-            // Track connection state changes
             pc.onconnectionstatechange = () => {
                 const state = pc.connectionState;
                 console.log(`[ScreenBroadcaster] 🚥 Connection state: ${state}`);
 
                 if (state === 'failed' || state === 'disconnected') {
                     console.warn(`[ScreenBroadcaster] ❌ Connection ${state}. Auto-restarting stream...`);
-                    // Cleanup existing
                     if (peerConnection.current) {
                         peerConnection.current.close();
                         peerConnection.current = null;
                     }
-
-                    // Announce readiness again so server can re-trigger us using activeSubscriptions
-                    console.log('[ScreenBroadcaster] 🔄 Re-announcing readiness to trigger backend auto-restore...');
+                    console.log('[ScreenBroadcaster] 🔄 Re-announcing readiness...');
                     socketService.emit('employee:live-ready', {});
                 }
             };
@@ -214,20 +238,17 @@ const ScreenBroadcaster = () => {
             };
 
             // Create Offer
-            try {
-                console.log('[ScreenBroadcaster] 📝 Creating WebRTC offer...');
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
+            console.log('[ScreenBroadcaster] 📝 Creating WebRTC offer...');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
 
-                console.log('[ScreenBroadcaster] 📤 Offer created, sending to:', targetSocketId);
-                socketService.emit('webrtc:offer', {
-                    targetSocketId,
-                    sdp: offer
-                });
-                console.log('[ScreenBroadcaster] ✅ Offer emission call completed');
-            } catch (offerError) {
-                console.error('[ScreenBroadcaster] ❌ Failed to create/send offer:', offerError);
-            }
+            console.log('[ScreenBroadcaster] 📤 Offer created, sending to:', targetSocketId);
+            socketService.emit('webrtc:offer', {
+                targetSocketId,
+                sdp: offer
+            });
+            console.log('[ScreenBroadcaster] ✅ Offer emission call completed');
+
         } catch (fetchError) {
             console.error('[ScreenBroadcaster] ❌ Failed to initialize secure peer connection:', fetchError);
         }
@@ -263,9 +284,11 @@ const ScreenBroadcaster = () => {
             peerConnection.current.close();
             peerConnection.current = null;
         }
+        isStarting.current = false;
     };
 
-    return null; // Invisible component
+    // Invisible component - no UI render
+    return null;
 };
 
 export default ScreenBroadcaster;

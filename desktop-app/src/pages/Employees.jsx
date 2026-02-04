@@ -44,6 +44,7 @@ import { formatDistanceToNow } from 'date-fns';
 import employeeService from '../services/employeeService';
 import settingsService from '../services/settingsService';
 import { toast } from 'react-toastify';
+import { motion } from 'framer-motion';
 
 function Employees() {
   const [employees, setEmployees] = useState([]);
@@ -122,7 +123,6 @@ function Employees() {
   const handleRemoveOverride = async (key) => {
     try {
       await settingsService.removeEmployeeOverride(selectedEmployeeSettings.id, key);
-      // Reload settings to get global values
       const response = await settingsService.getEmployeeSettings(selectedEmployeeSettings.id);
       setEmployeeSettings(response.data);
       toast.success('Reverted to global setting');
@@ -169,7 +169,7 @@ function Employees() {
     setNewEmployee({
       full_name: emp.full_name,
       email: emp.email,
-      password: '', // Leave empty to keep unchanged
+      password: '',
       department: emp.department || ''
     });
     setOpenDialog(true);
@@ -221,15 +221,15 @@ function Employees() {
   }, []);
 
   const getStatusColor = (status, lastSeen) => {
-    if (!lastSeen) return 'default';
+    if (!lastSeen) return '#9e9e9e'; // Grey
     const lastSeenDate = new Date(lastSeen);
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    if (lastSeenDate < tenMinutesAgo) return 'error'; // Offline
-    if (status === 'WORKING') return 'success';
-    if (status === 'BREAK') return 'warning';
-    if (status === 'IDLE') return 'info';
-    return 'default';
+    if (lastSeenDate < tenMinutesAgo) return '#F44336'; // Red
+    if (status === 'WORKING') return '#00E676'; // Bright Green
+    if (status === 'BREAK') return '#FFC107'; // Amber
+    if (status === 'IDLE') return '#29B6F6'; // Light Blue
+    return '#9e9e9e';
   };
 
   const getStatusLabel = (status, lastSeen) => {
@@ -244,48 +244,98 @@ function Employees() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
-        <CircularProgress />
+        <CircularProgress sx={{ color: '#FFD700' }} />
       </Box>
     );
   }
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Employees Management</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography
+          variant="h4"
+          fontWeight="800"
+          sx={{
+            background: 'linear-gradient(45deg, #FFF, #FFD700)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textShadow: '0 0 20px rgba(255, 215, 0, 0.3)'
+          }}
+        >
+          Employees Management
+        </Typography>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <TextField
             size="small"
-            placeholder="Search employees..."
+            placeholder="Search personnel..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon />
+                  <SearchIcon sx={{ color: '#FFD700' }} />
                 </InputAdornment>
               ),
+              sx: {
+                bgcolor: 'rgba(0,0,0,0.5)',
+                borderRadius: '12px',
+                color: '#FFF',
+                border: '1px solid rgba(255, 215, 0, 0.3)',
+                '& fieldset': { border: 'none' },
+                '& input::placeholder': { color: 'rgba(255,255,255,0.5)' }
+              }
             }}
           />
           <Button
             variant="contained"
-            color="primary"
             startIcon={<PersonAddIcon />}
             onClick={handleOpenDialog}
+            sx={{
+              background: 'linear-gradient(90deg, #FFD700 0%, #FF8C00 100%)',
+              color: '#000',
+              fontWeight: 'bold',
+              borderRadius: '12px',
+              '&:hover': {
+                background: 'linear-gradient(90deg, #FFC107 0%, #FF6D00 100%)',
+                boxShadow: '0 0 15px rgba(255, 215, 0, 0.4)'
+              }
+            }}
           >
             Add Employee
           </Button>
-          <IconButton onClick={fetchEmployees} color="primary">
+          <IconButton
+            onClick={fetchEmployees}
+            sx={{
+              color: '#FFD700',
+              bgcolor: 'rgba(255, 215, 0, 0.1)',
+              '&:hover': { bgcolor: 'rgba(255, 215, 0, 0.2)' }
+            }}
+          >
             <RefreshIcon />
           </IconButton>
         </Box>
       </Box>
 
-      {/* Add/Edit Employee Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>{isEditing ? 'Edit Employee' : 'Add New Employee'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Add/Edit Employee Dialog - Dark Theme */}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: '#0A0B10',
+            border: '1px solid rgba(255, 215, 0, 0.2)',
+            borderRadius: '16px',
+            boxShadow: '0 0 30px rgba(0,0,0,0.8)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ color: '#FFD700', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          {isEditing ? 'Edit Employee' : 'Add New Employee'}
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
               fullWidth
               label="Full Name"
@@ -293,6 +343,8 @@ function Employees() {
               value={newEmployee.full_name}
               onChange={handleInputChange}
               required
+              variant="outlined"
+              sx={{ '& .MuiOutlinedInput-root': { color: '#FFF', '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' }, '&:hover fieldset': { borderColor: '#FFD700' } }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
             />
             <TextField
               fullWidth
@@ -302,6 +354,7 @@ function Employees() {
               value={newEmployee.email}
               onChange={handleInputChange}
               required
+              sx={{ '& .MuiOutlinedInput-root': { color: '#FFF', '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' }, '&:hover fieldset': { borderColor: '#FFD700' } }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
             />
             <TextField
               fullWidth
@@ -309,6 +362,7 @@ function Employees() {
               name="department"
               value={newEmployee.department}
               onChange={handleInputChange}
+              sx={{ '& .MuiOutlinedInput-root': { color: '#FFF', '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' }, '&:hover fieldset': { borderColor: '#FFD700' } }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
             />
             <TextField
               fullWidth
@@ -318,17 +372,25 @@ function Employees() {
               value={newEmployee.password}
               onChange={handleInputChange}
               required={!isEditing}
+              sx={{ '& .MuiOutlinedInput-root': { color: '#FFF', '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' }, '&:hover fieldset': { borderColor: '#FFD700' } }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="inherit" disabled={submitting}>
+        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <Button onClick={handleCloseDialog} sx={{ color: 'rgba(255,255,255,0.6)' }}>
             Cancel
           </Button>
           <Button
             onClick={handleAddEmployee}
-            color="primary"
-            variant="contained"
+            sx={{
+              background: 'linear-gradient(90deg, #FFD700 0%, #FF8C00 100%)',
+              color: '#000',
+              fontWeight: 'bold',
+              px: 3,
+              '&:hover': {
+                background: 'linear-gradient(90deg, #FFC107 0%, #FF6D00 100%)',
+              }
+            }}
             disabled={submitting}
           >
             {submitting ? <CircularProgress size={24} color="inherit" /> : (isEditing ? 'Update Employee' : 'Create Employee')}
@@ -336,169 +398,101 @@ function Employees() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={deleteConfirmOpen}
-        onClose={handleCloseDeleteConfirm}
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{
+          bgcolor: 'rgba(5, 5, 8, 0.8)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 215, 0, 0.1)',
+          borderRadius: '24px',
+          overflow: 'hidden',
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)'
+        }}
       >
-        <DialogTitle>Delete Employee?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete <b>{employeeToDelete?.full_name}</b>?
-            This will permanently remove their account and all associated data.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteConfirm} color="inherit">Cancel</Button>
-          <Button onClick={handleDeleteEmployee} color="error" variant="contained" autoFocus>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Employee Specific Settings Dialog */}
-      <Dialog
-        open={!!selectedEmployeeSettings}
-        onClose={() => setSelectedEmployeeSettings(null)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          Settings for: {selectedEmployeeSettings?.full_name}
-          <Typography variant="caption" display="block" color="text.secondary">
-            Override global system settings for this specific employee.
-          </Typography>
-        </DialogTitle>
-        <DialogContent dividers>
-          {settingsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {Object.keys(employeeSettings).map(category => (
-                <Box key={category}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', textTransform: 'capitalize', mb: 1 }}>
-                    {category}
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {employeeSettings[category].map(setting => (
-                      <Grid item xs={12} sm={6} key={setting.key}>
-                        <Paper variant="outlined" sx={{ p: 2, position: 'relative' }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <Box sx={{ flexGrow: 1 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'medium' }}>{setting.key.replace(/_/g, ' ')}</Typography>
-                              <Box sx={{ mt: 1 }}>
-                                {setting.type === 'boolean' ? (
-                                  <Switch
-                                    checked={setting.value}
-                                    onChange={(e) => handleUpdateSetting(setting.key, e.target.checked, setting.type)}
-                                  />
-                                ) : (
-                                  <TextField
-                                    fullWidth
-                                    size="small"
-                                    type={setting.type === 'number' ? 'number' : 'text'}
-                                    value={setting.value}
-                                    onChange={(e) => handleUpdateSetting(setting.key, setting.type === 'number' ? parseFloat(e.target.value) : e.target.value, setting.type)}
-                                  />
-                                )}
-                              </Box>
-                            </Box>
-                            {setting.is_override && (
-                              <Tooltip title="Revert to Global">
-                                <IconButton size="small" color="error" onClick={() => handleRemoveOverride(setting.key)}>
-                                  <RestoreIcon sx={{ fontSize: 18 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                          </Box>
-                          <Typography variant="caption" color="text.secondary">
-                            Status: {setting.is_override ? (
-                              <Chip label="Overridden" color="primary" size="mini" sx={{ height: 16, fontSize: 10 }} />
-                            ) : (
-                              <Chip label="Global Default" size="mini" sx={{ height: 16, fontSize: 10 }} />
-                            )}
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedEmployeeSettings(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <TableContainer component={Paper} elevation={3}>
         <Table sx={{ minWidth: 650 }}>
           <TableHead>
-            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-              <TableCell>Employee</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last Seen</TableCell>
-              <TableCell>Department</TableCell>
-              <TableCell>PC Name</TableCell>
-              <TableCell>Google Sheet</TableCell>
-              <TableCell align="right">Actions</TableCell>
+            <TableRow sx={{ backgroundColor: 'rgba(255, 215, 0, 0.05)' }}>
+              {['Employee', 'Status', 'Last Seen', 'Department', 'PC Name', 'Google Sheet', 'Actions'].map((head) => (
+                <TableCell key={head} sx={{ color: '#FFD700', borderBottom: '1px solid rgba(255, 215, 0, 0.1)', fontWeight: 'bold' }}>
+                  {head}
+                </TableCell>
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredEmployees.map((emp) => (
-              <TableRow key={emp.id} hover>
-                <TableCell>
+              <TableRow
+                key={emp.id}
+                hover
+                sx={{
+                  '&:hover': { bgcolor: 'rgba(255, 215, 0, 0.03) !important' },
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                }}
+              >
+                <TableCell sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                    <Avatar sx={{
+                      mr: 2,
+                      bgcolor: 'rgba(255, 215, 0, 0.1)',
+                      color: '#FFD700',
+                      border: '1px solid rgba(255, 215, 0, 0.3)'
+                    }}>
                       {emp.full_name.charAt(0)}
                     </Avatar>
                     <Box>
-                      <Typography variant="subtitle2">{emp.full_name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{emp.email}</Typography>
+                      <Typography variant="subtitle2" sx={{ color: '#FFF' }}>{emp.full_name}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>{emp.email}</Typography>
                     </Box>
                   </Box>
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <Chip
                     label={getStatusLabel(emp.current_status, emp.last_seen)}
-                    color={getStatusColor(emp.current_status, emp.last_seen)}
                     size="small"
+                    sx={{
+                      bgcolor: `${getStatusColor(emp.current_status, emp.last_seen)}20`,
+                      color: getStatusColor(emp.current_status, emp.last_seen),
+                      border: `1px solid ${getStatusColor(emp.current_status, emp.last_seen)}40`,
+                      fontWeight: 'bold',
+                      fontSize: '0.7rem'
+                    }}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   {emp.last_seen
                     ? `${formatDistanceToNow(new Date(emp.last_seen))} ago`
                     : 'Never'
                   }
                 </TableCell>
-                <TableCell>{emp.department || '-'}</TableCell>
-                <TableCell>{emp.pc_name || '-'}</TableCell>
-                <TableCell>
+                <TableCell sx={{ color: '#FFF', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>{emp.department || '-'}</TableCell>
+                <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>{emp.pc_name || '-'}</TableCell>
+                <TableCell sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   {emp.google_sheet_url ? (
                     <Typography
                       variant="caption"
                       component="a"
                       href={emp.google_sheet_url}
                       target="_blank"
-                      sx={{ color: 'primary.main', textDecoration: 'none' }}
+                      sx={{ color: '#FFD700', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
                     >
                       Open Sheet
                     </Typography>
-                  ) : <Typography variant="caption" color="text.secondary">Not created</Typography>}
+                  ) : <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>Not created</Typography>}
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <Tooltip title="View Activity">
-                    <IconButton size="small" color="primary" onClick={() => handleViewActivity(emp.id)}>
+                    <IconButton size="small" sx={{ color: '#00E5FF' }} onClick={() => handleViewActivity(emp.id)}>
                       <VisibilityIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Edit Employee">
-                    <IconButton size="small" color="primary" onClick={() => handleEditOpen(emp)}>
+                    <IconButton size="small" sx={{ color: '#FFD700' }} onClick={() => handleEditOpen(emp)}>
                       <EditIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Custom Settings">
-                    <IconButton size="small" color="secondary" onClick={() => handleOpenSettings(emp)}>
+                    <IconButton size="small" sx={{ color: '#AB47BC' }} onClick={() => handleOpenSettings(emp)}>
                       <SettingsIcon />
                     </IconButton>
                   </Tooltip>
@@ -512,8 +506,10 @@ function Employees() {
             ))}
             {filteredEmployees.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                  <Typography color="text.secondary">No employees found</Typography>
+                <TableCell colSpan={7} align="center" sx={{ py: 6, borderBottom: 'none' }}>
+                  <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+                    No personnel records found in the database.
+                  </Typography>
                 </TableCell>
               </TableRow>
             )}

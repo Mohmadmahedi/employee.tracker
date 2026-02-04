@@ -141,19 +141,32 @@ function LiveMonitoring() {
   const handleWebRTCOffer = async (data) => {
     try {
       console.log('[LiveMonitoring] 📥 Received WebRTC Offer from:', data.senderSocketId);
+
+      // Cleanup any existing connection
       if (peerConnectionRef.current) {
-        console.log('[LiveMonitoring] Closing existing peer connection');
+        console.log('[LiveMonitoring] Closing existing peer connection before accepting new offer');
         peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
       }
 
-      console.log('[LiveMonitoring] Fetching secure TURN credentials...');
-      const response = await api.get('/turn');
-      const { iceServers } = response.data;
+      setStreamReady(false); // Reset ready state
 
-      console.log('[LiveMonitoring] Creating new Secure RTCPeerConnection...');
+      console.log('[LiveMonitoring] Fetching secure TURN credentials...');
+      let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]; // Default fallback
+
+      try {
+        const response = await api.get('/turn');
+        if (response.data && response.data.iceServers) {
+          iceServers = response.data.iceServers;
+        }
+      } catch (e) {
+        console.warn('[LiveMonitoring] Failed to fetch TURN credentials, using STUN fallback:', e);
+      }
+
+      console.log('[LiveMonitoring] Creating new RTCPeerConnection...');
       const pc = new RTCPeerConnection({
         iceServers: iceServers,
-        iceTransportPolicy: 'relay', // Fix: Mandatory for enterprise security
+        iceTransportPolicy: 'all', // Allow both STUN and TURN
         iceCandidatePoolSize: 10
       });
 
@@ -162,8 +175,13 @@ function LiveMonitoring() {
       // Connection state logging
       pc.onconnectionstatechange = () => {
         console.log(`[LiveMonitoring] 🚥 Connection state: ${pc.connectionState}`);
-        if (pc.connectionState === 'failed') {
-          console.warn('[LiveMonitoring] ❌ Connection FAILED. Check if UDP/TCP ports 3478, 80, 443 are blocked.');
+        if (pc.connectionState === 'connected') {
+          setStreamReady(true);
+          toast.success('Live stream connected!');
+        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          console.warn('[LiveMonitoring] ❌ Connection failed/disconnected');
+          // Don't auto-close dialog, let user decide or retry
+          setStreamReady(false);
         }
       };
 
@@ -175,29 +193,32 @@ function LiveMonitoring() {
         console.warn('[LiveMonitoring] 🧊 ICE Candidate Error:', event.errorText, event.errorCode, event.url);
       };
 
-      // Handle Track
+      // Handle Track - This is crucial!
       pc.ontrack = (event) => {
-        console.log('[LiveMonitoring] 📺 Received Remote Track');
-        if (videoRef.current) {
-          videoRef.current.srcObject = event.streams[0];
-          setStreamReady(true);
+        console.log('[LiveMonitoring] 📺 Received Remote Track', event.streams);
+        if (event.streams && event.streams[0]) {
+          if (videoRef.current) {
+            videoRef.current.srcObject = event.streams[0];
+            console.log('[LiveMonitoring] ✅ Assigned stream to video element');
+
+            // Force play
+            videoRef.current.play().catch(e => console.error('[LiveMonitoring] Auto-play failed:', e));
+          }
         }
       };
 
       // Handle ICE
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('[LiveMonitoring] ❄️ Found local ICE candidate');
+          // console.log('[LiveMonitoring] ❄️ Found local ICE candidate');
           socketService.emit('webrtc:ice-candidate', {
             targetSocketId: data.senderSocketId,
             candidate: event.candidate
           });
-        } else {
-          console.log('[LiveMonitoring] ❄️ End of ICE candidates');
         }
       };
 
-      // Set Remote
+      // Set Remote Description (Offer)
       console.log('[LiveMonitoring] Setting remote description...');
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
@@ -216,7 +237,8 @@ function LiveMonitoring() {
 
     } catch (err) {
       console.error('[LiveMonitoring] ❌ WebRTC negotiation failed:', err);
-      toast.error('Failed to establish connection');
+      toast.error('Failed to establish connection: ' + err.message);
+      setStreamReady(false);
     }
   };
 
@@ -379,22 +401,29 @@ function LiveMonitoring() {
                     {emp.full_name?.charAt(0) || '?'}
                   </Avatar>
                 }
-                title={emp.full_name}
-                subheader={emp.pc_name || 'Generic PC'}
-                action={
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <FiberManualRecord
+                title={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="subtitle1" fontWeight="bold" noWrap sx={{ maxWidth: 120 }}>
+                      {emp.full_name}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      icon={<FiberManualRecord sx={{ fontSize: '10px !important' }} />}
+                      label={emp.current_status === 'OFF' ? 'Offline' : (emp.current_status || 'Offline')}
+                      color={getStatusColor(emp.current_status, emp.last_seen)}
                       sx={{
-                        fontSize: 12,
-                        mr: 0.5,
-                        color: `${getStatusColor(emp.current_status, emp.last_seen)}.main`
+                        height: 22,
+                        fontSize: '0.7rem',
+                        '& .MuiChip-icon': {
+                          color: 'inherit',
+                          ml: 0.5
+                        }
                       }}
                     />
-                    <Typography variant="caption" sx={{ textTransform: 'uppercase' }}>
-                      {emp.current_status === 'OFF' ? 'Offline' : (emp.current_status || 'Offline')}
-                    </Typography>
                   </Box>
                 }
+                subheader={emp.pc_name || 'Generic PC'}
+                sx={{ pb: 1 }}
               />
               <CardContent sx={{ flexGrow: 1, p: 0, position: 'relative', bgcolor: '#000', height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Monitor sx={{ fontSize: 48, color: 'rgba(255,255,255,0.5)' }} />

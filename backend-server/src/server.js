@@ -65,8 +65,10 @@ app.get('/api/keep-alive', (req, res) => {
 // Rate limiting
 const limiter = rateLimit({
   windowMs: (process.env.RATE_LIMIT_WINDOW || 15) * 60 * 1000,
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 1000,
-  message: 'Too many requests from this IP, please try again later.'
+  max: process.env.RATE_LIMIT_MAX_REQUESTS || 3000, // Increased from 1000 to 3000 to handle multiple admins/reconnections
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 429, message: 'Too many requests from this IP, please try again later.' }
 });
 app.use('/api/', limiter);
 
@@ -231,7 +233,7 @@ io.on('connection', (socket) => {
             adminSocketId: req.adminSocketId
           });
           console.log(`[Queue] 🚀 Launched deferred stream for Admin ${req.adminId}`);
-          
+
           // Also add to active subscriptions for persistence
           if (!activeSubscriptions.has(empId)) activeSubscriptions.set(empId, new Set());
           activeSubscriptions.get(empId).add(req.adminSocketId);
@@ -245,22 +247,22 @@ io.on('connection', (socket) => {
       if (activeSubscriptions.has(empId)) {
         const admins = activeSubscriptions.get(empId);
         if (admins.size > 0) {
-            console.log(`[AutoRestore] Found ${admins.size} active listeners for ${empId}. Restoring streams...`);
-            admins.forEach(adminSocketId => {
-                // Check if admin is still connected
-                const adminSocket = io.sockets.sockets.get(adminSocketId);
-                if (adminSocket) {
-                    // Send start command
-                    io.to(roomName).emit(`employee:${empId}:start-stream`, {
-                        adminSocketId: adminSocketId
-                        // We don't necessarily have adminId here easily without lookups, but usually adminSocketId is enough for signaling
-                    });
-                    console.log(`[AutoRestore] 🔄 Restoring stream for Admin Socket ${adminSocketId}`);
-                } else {
-                    // Admin disconnected, remove from set
-                    admins.delete(adminSocketId);
-                }
-            });
+          console.log(`[AutoRestore] Found ${admins.size} active listeners for ${empId}. Restoring streams...`);
+          admins.forEach(adminSocketId => {
+            // Check if admin is still connected
+            const adminSocket = io.sockets.sockets.get(adminSocketId);
+            if (adminSocket) {
+              // Send start command
+              io.to(roomName).emit(`employee:${empId}:start-stream`, {
+                adminSocketId: adminSocketId
+                // We don't necessarily have adminId here easily without lookups, but usually adminSocketId is enough for signaling
+              });
+              console.log(`[AutoRestore] 🔄 Restoring stream for Admin Socket ${adminSocketId}`);
+            } else {
+              // Admin disconnected, remove from set
+              admins.delete(adminSocketId);
+            }
+          });
         }
       }
     }
@@ -286,7 +288,7 @@ io.on('connection', (socket) => {
         // We do NOT return error immediately if we want to wait for them to come online
         // But for UI feedback, we can say "Waiting..."
         socket.emit('admin:stream-status', { status: 'waiting_for_employee', message: 'Employee offline, waiting for connection...' });
-        return; 
+        return;
       }
 
       // CHECK 2: Is their Video Component ready?
@@ -330,11 +332,11 @@ io.on('connection', (socket) => {
   // Admin stop live screen request
   socket.on('admin:stop-live-screen', (data) => {
     const { employeeId } = data;
-    
+
     // REMOVE FROM SUBSCRIPTIONS
     if (activeSubscriptions.has(employeeId)) {
-        activeSubscriptions.get(employeeId).delete(socket.id);
-        console.log(`[LiveScreen] Admin ${socket.id} unsubscribed from ${employeeId}`);
+      activeSubscriptions.get(employeeId).delete(socket.id);
+      console.log(`[LiveScreen] Admin ${socket.id} unsubscribed from ${employeeId}`);
     }
 
     io.emit(`employee:${employeeId}:stop-stream`, { adminSocketId: socket.id });
@@ -443,12 +445,12 @@ io.on('connection', (socket) => {
       // If admin disconnects, we should probably remove their subscriptions
       // But we need to iterate the map since it's keyed by employeeId
       activeSubscriptions.forEach((admins, employeeId) => {
-          if (admins.has(socket.id)) {
-              admins.delete(socket.id);
-              console.log(`[Cleanup] Removed Admin subscription for ${employeeId} on disconnect`);
-              // Optionally notify employee to stop streaming to this admin (if supporting multi-cast someday, current implementation usually stops all)
-              io.emit(`employee:${employeeId}:stop-stream`, { adminSocketId: socket.id });
-          }
+        if (admins.has(socket.id)) {
+          admins.delete(socket.id);
+          console.log(`[Cleanup] Removed Admin subscription for ${employeeId} on disconnect`);
+          // Optionally notify employee to stop streaming to this admin (if supporting multi-cast someday, current implementation usually stops all)
+          io.emit(`employee:${employeeId}:stop-stream`, { adminSocketId: socket.id });
+        }
       });
       return;
     }
@@ -480,7 +482,7 @@ io.on('connection', (socket) => {
         // Clear video status and pending requests
         employeeVideoStatus.delete(empId);
         pendingVideoRequests.delete(empId);
-        
+
         // NOTE: We do NOT delete from activeSubscriptions here.
         // We want to remember that an admin was watching, so when they reconnect, we resume.
 

@@ -49,7 +49,8 @@ function createWindow() {
 
     // In development, load the Vite dev server
     // In production, load the built index.html
-    const isDev = !app.isPackaged;
+    // Force load the built file for verification
+    const isDev = false; // !app.isPackaged;
     if (isDev) {
         mainWindow.loadURL('http://localhost:5173');
         // mainWindow.webContents.openDevTools(); // Commented out for stealth

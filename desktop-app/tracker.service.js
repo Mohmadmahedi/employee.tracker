@@ -216,10 +216,16 @@ class TrackerService {
             console.error('Heartbeat failed:', error.message);
 
             // Check for 401 Unauthorized or explicit logout signal
-            if (error.response && error.response.status === 401) {
-                console.log('Authentication failed, stopping tracker...');
-                this.stop();
-                if (this.onLogout) this.onLogout();
+            if (error.response) {
+                if (error.response.status === 401) {
+                    console.log('Authentication failed, stopping tracker...');
+                    this.stop();
+                    if (this.onLogout) this.onLogout();
+                } else if (error.response.status === 429) {
+                    console.warn('[TrackerService] ⚠️ Rate limit exceeded. Backing off...');
+                } else if (error.response.status === 503) {
+                    console.warn('[TrackerService] ⚠️ Server temporarily unavailable (503). Retrying later...');
+                }
             }
         }
     }
