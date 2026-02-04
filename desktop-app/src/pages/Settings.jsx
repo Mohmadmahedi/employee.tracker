@@ -70,9 +70,9 @@ function Settings() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      
+
       const changedSettings = [];
-      
+
       Object.keys(settings).forEach(category => {
         settings[category].forEach(setting => {
           const original = originalSettings[category]?.find(s => s.key === setting.key);
@@ -91,7 +91,7 @@ function Settings() {
       }
 
       await settingsService.bulkUpdateSettings(changedSettings, 'Admin updated settings from dashboard');
-      
+
       toast.success(`${changedSettings.length} settings saved successfully!`);
       setHasChanges(false);
       setOriginalSettings(JSON.parse(JSON.stringify(settings)));
@@ -124,6 +124,18 @@ function Settings() {
     }
   };
 
+  const commonInputStyles = {
+    '& .MuiOutlinedInput-root': {
+      color: '#FFF',
+      '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+      '&:hover fieldset': { borderColor: '#FFD700' },
+      '&.Mui-focused fieldset': { borderColor: '#FFD700' },
+    },
+    '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.6)' },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#FFD700' },
+    '& .MuiSelect-icon': { color: '#FFD700' }
+  };
+
   const renderSettingField = (category, setting) => {
     switch (setting.type) {
       case 'boolean':
@@ -133,12 +145,22 @@ function Settings() {
               <Switch
                 checked={setting.value}
                 onChange={(e) => handleChange(category, setting.key, e.target.checked)}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': {
+                    color: '#FFD700',
+                    '&:hover': { backgroundColor: 'rgba(255, 215, 0, 0.1)' },
+                  },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                    backgroundColor: '#FFD700',
+                  },
+                  '& .MuiSwitch-track': { backgroundColor: 'rgba(255,255,255,0.3)' }
+                }}
               />
             }
-            label={setting.description || setting.key}
+            label={<Typography sx={{ color: '#FFF' }}>{setting.description || setting.key}</Typography>}
           />
         );
-      
+
       case 'number':
         return (
           <TextField
@@ -149,13 +171,14 @@ function Settings() {
             onChange={(e) => handleChange(category, setting.key, parseFloat(e.target.value))}
             variant="outlined"
             size="small"
+            sx={commonInputStyles}
           />
         );
-      
+
       case 'string':
         if (setting.key.includes('interval') || setting.key.includes('frequency')) {
           return (
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={commonInputStyles}>
               <InputLabel>{setting.description || setting.key}</InputLabel>
               <Select
                 value={setting.value}
@@ -177,9 +200,10 @@ function Settings() {
             onChange={(e) => handleChange(category, setting.key, e.target.value)}
             variant="outlined"
             size="small"
+            sx={commonInputStyles}
           />
         );
-      
+
       default:
         return (
           <TextField
@@ -196,6 +220,7 @@ function Settings() {
             variant="outlined"
             size="small"
             multiline
+            sx={commonInputStyles}
           />
         );
     }
@@ -203,9 +228,20 @@ function Settings() {
 
   const renderCategory = (category, settingsList) => {
     return (
-      <Accordion defaultExpanded>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
+      <Accordion
+        defaultExpanded
+        sx={{
+          bgcolor: 'rgba(255, 255, 255, 0.03)',
+          color: '#FFF',
+          border: '1px solid rgba(255, 215, 0, 0.1)',
+          borderRadius: '12px !important',
+          mb: 2,
+          boxShadow: 'none',
+          '&:before': { display: 'none' }
+        }}
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: '#FFD700' }} />}>
+          <Typography variant="h6" sx={{ textTransform: 'capitalize', color: '#FFD700', fontWeight: 'bold' }}>
             {category} Settings
           </Typography>
         </AccordionSummary>
@@ -215,7 +251,7 @@ function Settings() {
               <Grid item xs={12} md={6} key={setting.key}>
                 <Box sx={{ mb: 2 }}>
                   {renderSettingField(category, setting)}
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  <Typography variant="caption" sx={{ mt: 0.5, display: 'block', color: 'rgba(255,255,255,0.4)' }}>
                     Key: {setting.key}
                   </Typography>
                 </Box>
@@ -230,7 +266,7 @@ function Settings() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress />
+        <CircularProgress sx={{ color: '#FFD700' }} />
       </Box>
     );
   }
@@ -238,7 +274,17 @@ function Settings() {
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{
+            background: 'linear-gradient(45deg, #FFF, #FFD700)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textShadow: '0 0 20px rgba(255, 215, 0, 0.3)',
+            fontWeight: 800
+          }}
+        >
           System Settings
         </Typography>
         <Box>
@@ -246,7 +292,7 @@ function Settings() {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExport}
-            sx={{ mr: 1 }}
+            sx={{ mr: 1, borderColor: '#FFD700', color: '#FFD700', '&:hover': { borderColor: '#FFF', bgcolor: 'rgba(255,215,0,0.1)' } }}
           >
             Export
           </Button>
@@ -254,7 +300,7 @@ function Settings() {
             variant="outlined"
             startIcon={<UploadIcon />}
             component="label"
-            sx={{ mr: 1 }}
+            sx={{ mr: 1, borderColor: '#FFD700', color: '#FFD700', '&:hover': { borderColor: '#FFF', bgcolor: 'rgba(255,215,0,0.1)' } }}
           >
             Import
             <input type="file" hidden accept=".json" />
@@ -263,14 +309,35 @@ function Settings() {
       </Box>
 
       {hasChanges && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert
+          severity="warning"
+          sx={{ mb: 2, bgcolor: 'rgba(255, 152, 0, 0.1)', color: '#FFB74D', border: '1px solid rgba(255, 152, 0, 0.3)' }}
+        >
           You have unsaved changes. Don't forget to save!
         </Alert>
       )}
 
-      <Paper sx={{ mb: 3 }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tab} onChange={(e, v) => setTab(v)}>
+      <Paper
+        elevation={0}
+        sx={{
+          mb: 3,
+          bgcolor: 'rgba(5, 5, 8, 0.8)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 215, 0, 0.1)',
+          borderRadius: 4,
+          overflow: 'hidden'
+        }}
+      >
+        <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+          <Tabs
+            value={tab}
+            onChange={(e, v) => setTab(v)}
+            sx={{
+              '& .MuiTabs-indicator': { backgroundColor: '#FFD700' },
+              '& .MuiTab-root': { color: 'rgba(255,255,255,0.6)' },
+              '& .MuiTab-root.Mui-selected': { color: '#FFD700' }
+            }}
+          >
             <Tab label="All Settings" />
             <Tab label="Screenshot" />
             <Tab label="Monitoring" />
@@ -282,10 +349,10 @@ function Settings() {
         <Box sx={{ p: 3 }}>
           {tab === 0 && (
             <Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.6)' }}>
                 Control all desktop application behavior from here. Changes will be pushed to all employee apps in real-time.
               </Typography>
-              
+
               {Object.keys(settings).map((category) => (
                 <Box key={category} sx={{ mb: 2 }}>
                   {renderCategory(category, settings[category])}
@@ -296,7 +363,7 @@ function Settings() {
 
           {tab === 1 && settings.screenshot && (
             <Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.6)' }}>
                 Configure screenshot capture behavior for all employee desktop applications.
               </Typography>
               {renderCategory('screenshot', settings.screenshot)}
@@ -305,7 +372,7 @@ function Settings() {
 
           {tab === 2 && settings.monitoring && (
             <Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.6)' }}>
                 Configure activity monitoring and tracking parameters.
               </Typography>
               {renderCategory('monitoring', settings.monitoring)}
@@ -315,7 +382,7 @@ function Settings() {
 
           {tab === 3 && settings.security && (
             <Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.6)' }}>
                 Security and anti-tamper protection settings.
               </Typography>
               {renderCategory('security', settings.security)}
@@ -324,7 +391,7 @@ function Settings() {
 
           {tab === 4 && (
             <Box>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ mb: 3, color: 'rgba(255,255,255,0.6)' }}>
                 External integrations (Google Sheets, Email, etc.)
               </Typography>
               {settings.integration && renderCategory('integration', settings.integration)}
@@ -333,7 +400,7 @@ function Settings() {
             </Box>
           )}
 
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: 3, borderColor: 'rgba(255, 255, 255, 0.1)' }} />
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
             <Button
@@ -341,6 +408,7 @@ function Settings() {
               startIcon={<RestoreIcon />}
               onClick={handleReset}
               disabled={!hasChanges || saving}
+              sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.3)', '&:hover': { borderColor: '#FFF', bgcolor: 'rgba(255,255,255,0.05)' } }}
             >
               Reset
             </Button>
@@ -349,6 +417,12 @@ function Settings() {
               startIcon={<SaveIcon />}
               onClick={handleSave}
               disabled={!hasChanges || saving}
+              sx={{
+                background: 'linear-gradient(90deg, #FFD700 0%, #FF8C00 100%)',
+                color: '#000',
+                fontWeight: 'bold',
+                '&:hover': { background: 'linear-gradient(90deg, #FFC107 0%, #FF6D00 100%)' }
+              }}
             >
               {saving ? 'Saving...' : 'Save All Changes'}
             </Button>
@@ -356,7 +430,15 @@ function Settings() {
         </Box>
       </Paper>
 
-      <Alert severity="info">
+      <Alert
+        severity="info"
+        sx={{
+          bgcolor: 'rgba(33, 150, 243, 0.1)',
+          color: '#64B5F6',
+          border: '1px solid rgba(33, 150, 243, 0.3)',
+          '& .MuiAlert-icon': { color: '#64B5F6' }
+        }}
+      >
         <strong>Real-time Updates:</strong> All changes are automatically pushed to employee desktop applications via WebSocket.
         Employees will receive updated settings within seconds.
       </Alert>

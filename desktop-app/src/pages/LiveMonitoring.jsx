@@ -178,10 +178,14 @@ function LiveMonitoring() {
         if (pc.connectionState === 'connected') {
           setStreamReady(true);
           toast.success('Live stream connected!');
-        } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-          console.warn('[LiveMonitoring] ❌ Connection failed/disconnected');
+        } else if (pc.connectionState === 'failed') {
+          console.warn('[LiveMonitoring] ❌ Connection failed');
           // Don't auto-close dialog, let user decide or retry
           setStreamReady(false);
+          toast.error('Connection failed');
+        } else if (pc.connectionState === 'disconnected') {
+          console.warn('[LiveMonitoring] ⚠️ Connection disconnected (waiting for recovery...)');
+          // Do NOT setStreamReady(false) immediately, give it a chance to recover
         }
       };
 
@@ -198,11 +202,16 @@ function LiveMonitoring() {
         console.log('[LiveMonitoring] 📺 Received Remote Track', event.streams);
         if (event.streams && event.streams[0]) {
           if (videoRef.current) {
-            videoRef.current.srcObject = event.streams[0];
-            console.log('[LiveMonitoring] ✅ Assigned stream to video element');
+            // Fix: Check if we are already playing this stream to avoid "play() interrupted" error
+            if (videoRef.current.srcObject !== event.streams[0]) {
+              videoRef.current.srcObject = event.streams[0];
+              console.log('[LiveMonitoring] ✅ Assigned stream to video element');
 
-            // Force play
-            videoRef.current.play().catch(e => console.error('[LiveMonitoring] Auto-play failed:', e));
+              // Force play
+              videoRef.current.play().catch(e => console.error('[LiveMonitoring] Auto-play failed:', e));
+            } else {
+              console.log('[LiveMonitoring] ℹ️ Stream already assigned, skipping play() call');
+            }
           }
         }
       };

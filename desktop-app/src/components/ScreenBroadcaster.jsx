@@ -195,7 +195,7 @@ const ScreenBroadcaster = () => {
                 const state = pc.connectionState;
                 console.log(`[ScreenBroadcaster] 🚥 Connection state: ${state}`);
 
-                if (state === 'failed' || state === 'disconnected') {
+                if (state === 'failed') {
                     console.warn(`[ScreenBroadcaster] ❌ Connection ${state}. Auto-restarting stream...`);
                     if (peerConnection.current) {
                         peerConnection.current.close();
@@ -203,6 +203,9 @@ const ScreenBroadcaster = () => {
                     }
                     console.log('[ScreenBroadcaster] 🔄 Re-announcing readiness...');
                     socketService.emit('employee:live-ready', {});
+                } else if (state === 'disconnected') {
+                    // Just warn, don't kill it yet. It might recover.
+                    console.warn(`[ScreenBroadcaster] ⚠️ Connection disconnected. Waiting for recovery or failure...`);
                 }
             };
 

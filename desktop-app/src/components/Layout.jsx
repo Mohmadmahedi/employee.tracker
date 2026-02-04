@@ -59,35 +59,74 @@ function AnimatedMenuItem({ item, isSelected, onClick, index }) {
         ease: [0.4, 0, 0.2, 1]
       }}
     >
-      <ListItem disablePadding sx={{ mb: 0.5 }}>
+      <ListItem disablePadding sx={{ mb: 1 }}>
         <ListItemButton
           selected={isSelected}
           onClick={onClick}
-          // We let CSS handle the hover/selected states for performance and cleaner code
-          // in .holo-sidebar .Mui-selected
           sx={{
             mx: 1.5,
-            borderRadius: 3,
+            borderRadius: '12px',
+            position: 'relative',
+            overflow: 'hidden',
+            border: isSelected ? '1px solid rgba(255, 215, 0, 0.3)' : '1px solid transparent',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              background: 'rgba(255, 215, 0, 0.08)',
+              border: '1px solid rgba(255, 215, 0, 0.2)',
+              transform: 'translateY(-1px)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              '& .MuiListItemIcon-root': {
+                color: '#FFD700',
+                filter: 'drop-shadow(0 0 5px rgba(255, 215, 0, 0.6))'
+              },
+              '& .MuiTypography-root': {
+                color: '#FFF',
+                textShadow: '0 0 8px rgba(255, 215, 0, 0.6)'
+              }
+            },
             '& .MuiListItemIcon-root': {
-              color: isSelected ? '#FFD700' : 'rgba(255, 255, 255, 0.6)',
+              color: isSelected ? '#FFD700' : 'rgba(255, 255, 255, 0.85)',
+              minWidth: 40,
+              transition: 'all 0.3s ease'
             },
             '& .MuiListItemText-primary': {
-              color: isSelected ? '#FFF' : 'rgba(255, 255, 255, 0.6)',
-              fontWeight: isSelected ? 'bold' : 'normal',
-              letterSpacing: '0.5px'
+              color: isSelected ? '#FFF' : 'rgba(255, 255, 255, 0.85)',
+              fontWeight: isSelected ? 'bold' : '500',
+              fontSize: '0.9rem',
+              letterSpacing: '0.5px',
+              transition: 'all 0.3s ease'
             }
           }}
         >
-          <ListItemIcon sx={{ minWidth: 40 }}>
-            {/* Animated Icon Rotation on Select */}
+          <ListItemIcon>
             <motion.div
-              animate={{ rotate: isSelected ? 360 : 0, scale: isSelected ? 1.1 : 1 }}
-              transition={{ duration: 0.5 }}
+              animate={{
+                rotate: isSelected ? 360 : 0,
+                scale: isSelected ? 1.2 : 1,
+                filter: isSelected ? 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.6))' : 'none'
+              }}
+              transition={{ duration: 0.4 }}
             >
               {item.icon}
             </motion.div>
           </ListItemIcon>
           <ListItemText primary={item.text} />
+
+          {isSelected && (
+            <motion.div
+              layoutId="activeGlow"
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '15%',
+                bottom: '15%',
+                width: '3px',
+                backgroundColor: '#FFD700',
+                boxShadow: '0 0 10px #FFD700',
+                borderRadius: '0 4px 4px 0'
+              }}
+            />
+          )}
         </ListItemButton>
       </ListItem>
     </motion.div>
